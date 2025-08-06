@@ -183,7 +183,7 @@ def generar_pdf(fecha, consolidado, hora, df, total_paquetes):
     text_width = pdf.get_string_width('Yixon Gonzalez Diaz')
     centered_x = left_x + (line_length - text_width) / 2
     pdf.set_xy(centered_x, firmas_y)
-    pdf.cell(text_width, 5, 'Yixon Gonzalez Diaz', 0, 0, 'L')
+    pdf.cell(text_width, 5, 'Yixon Diaz', 0, 0, 'L')
     pdf.line(left_x, firmas_y + 7, left_x + line_length, firmas_y + 7)
     
     pdf.set_font('Arial', 'B', 12)
@@ -297,3 +297,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
