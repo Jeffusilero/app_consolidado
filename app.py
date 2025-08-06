@@ -183,7 +183,7 @@ def generar_pdf(fecha, consolidado, hora, df, total_paquetes):
     text_width = pdf.get_string_width('Yixon Gonzalez Diaz')
     centered_x = left_x + (line_length - text_width) / 2
     pdf.set_xy(centered_x, firmas_y)
-    pdf.cell(text_width, 5, 'Yixon Diaz', 0, 0, 'L')
+    pdf.cell(text_width, 5, 'Yixon Gonzalez Diaz', 0, 0, 'L')
     pdf.line(left_x, firmas_y + 7, left_x + line_length, firmas_y + 7)
     
     pdf.set_font('Arial', 'B', 12)
@@ -227,48 +227,48 @@ def main():
                                key="comp_file")
     
     if base_files and comp_file:
-    # Procesar archivo de comparación
-    try:
-        df_comp = pd.read_excel(comp_file, header=None, dtype=str)
-        
-        # Crear diccionario de coincidencias M -> H
-        saco_mapping = {}
-        for _, row in df_comp.iterrows():
-            if len(row) >= 13:  # Verificar que tenga columna M (índice 12)
-                if pd.notna(row[12]):  # Columna M
-                    saco_mapping[row[12]] = row[7] if (len(row) > 7 and pd.notna(row[7])) else ''
-        
-        # Combinar todos los archivos base en un solo DataFrame
-        combined_df = pd.DataFrame()
-        
-        for base_file in base_files:
-            df_base = pd.read_excel(base_file, header=None, dtype=str)
-            df_base = df_base.iloc[:, :3]  # Tomar primeras 3 columnas
-            df_base[3] = ''  # Columna SACO vacía
-            combined_df = pd.concat([combined_df, df_base], ignore_index=True)
-        
-        # Aplicar mapeo SACO al dataframe combinado
-        for idx, row in combined_df.iterrows():
-            guia = str(row[0]) if pd.notna(row[0]) else ''
+        # Procesar archivo de comparación
+        try:
+            df_comp = pd.read_excel(comp_file, header=None, dtype=str)
             
-            # Caso 1: Guías que son exactamente "SACO" -> "AMBATO"
-            if guia == 'SACO':
-                combined_df.at[idx, 3] = 'AMBATO'
-            # Caso 2: Guías que comienzan con "QU" -> "QUITO" (si no están en el mapeo)
-            elif guia.startswith('QU'):
-                combined_df.at[idx, 3] = saco_mapping.get(guia, 'QUITO')
-            # Caso 3: Cualquier otro caso -> "AMBATO"
-            else:
-                combined_df.at[idx, 3] = saco_mapping.get(guia, 'AMBATO')
-        
-        # ORDENAR POR COLUMNA SACO (columna 3)
-        # Convertir a numérico (los no numéricos se convierten en NaN)
-        combined_df[3] = pd.to_numeric(combined_df[3], errors='coerce')
-        # Ordenar (los NaN van primero)
-        combined_df = combined_df.sort_values(by=3, na_position='first')
-        # Volver a string y limpiar NaN
-        combined_df[3] = combined_df[3].astype(str)
-        combined_df = combined_df.replace('nan', '')
+            # Crear diccionario de coincidencias M -> H
+            saco_mapping = {}
+            for _, row in df_comp.iterrows():
+                if len(row) >= 13:  # Verificar que tenga columna M (índice 12)
+                    if pd.notna(row[12]):  # Columna M
+                        saco_mapping[row[12]] = row[7] if (len(row) > 7 and pd.notna(row[7])) else ''
+            
+            # Combinar todos los archivos base en un solo DataFrame
+            combined_df = pd.DataFrame()
+            
+            for base_file in base_files:
+                df_base = pd.read_excel(base_file, header=None, dtype=str)
+                df_base = df_base.iloc[:, :3]  # Tomar primeras 3 columnas
+                df_base[3] = ''  # Columna SACO vacía
+                combined_df = pd.concat([combined_df, df_base], ignore_index=True)
+            
+            # Aplicar mapeo SACO al dataframe combinado
+            for idx, row in combined_df.iterrows():
+                guia = str(row[0]) if pd.notna(row[0]) else ''
+                
+                # Caso 1: Guías que son exactamente "SACO" -> "AMBATO"
+                if guia == 'SACO':
+                    combined_df.at[idx, 3] = 'AMBATO'
+                # Caso 2: Guías que comienzan con "QU" -> "QUITO" (si no están en el mapeo)
+                elif guia.startswith('QU'):
+                    combined_df.at[idx, 3] = saco_mapping.get(guia, 'QUITO')
+                # Caso 3: Cualquier otro caso -> "AMBATO"
+                else:
+                    combined_df.at[idx, 3] = saco_mapping.get(guia, 'AMBATO')
+            
+            # ORDENAR POR COLUMNA SACO (columna 3)
+            # Convertir a numérico (los no numéricos se convierten en NaN)
+            combined_df[3] = pd.to_numeric(combined_df[3], errors='coerce')
+            # Ordenar (los NaN van primero)
+            combined_df = combined_df.sort_values(by=3, na_position='first')
+            # Volver a string y limpiar NaN
+            combined_df[3] = combined_df[3].astype(str)
+            combined_df = combined_df.replace('nan', '')
             
             total_paquetes = len(combined_df)
             
@@ -294,5 +294,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
