@@ -5,11 +5,36 @@ from fpdf import FPDF
 import io
 import locale
 
-# Configurar locale para nombres de meses en español
-try:
-    locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-except:
-    locale.setlocale(locale.LC_TIME, 'spanish')
+# Configuración robusta de locale para nombres de meses en español
+def configure_locale():
+    locale_options = [
+        'es_ES.UTF-8', 
+        'es_ES.utf8',
+        'es_ES',
+        'spanish',
+        'es_CO.UTF-8',
+        'es_MX.UTF-8',
+        'es_AR.UTF-8'
+    ]
+    
+    for loc in locale_options:
+        try:
+            locale.setlocale(locale.LC_TIME, loc)
+            return True
+        except (locale.Error, Exception):
+            continue
+    
+    try:
+        # Último intento con locale neutral
+        locale.setlocale(locale.LC_TIME, 'C')
+        st.warning("No se pudo configurar el locale en español. Se usará formato neutral.")
+        return False
+    except:
+        st.error("Error crítico al configurar locale")
+        return False
+
+# Ejecutar la configuración de locale
+configure_locale()
 
 class PDF(FPDF):
     def __init__(self, orientation='P', unit='mm', format='A4'):
@@ -39,8 +64,15 @@ def generar_pdf(fecha, consolidado, hora, df, total_paquetes):
     hora_x, hora_y = 110, 17
     paquetes_x, paquetes_y = 110, 22
     
+    # Formatear fecha según locale configurado
+    try:
+        fecha_str = fecha.strftime("%d de %B de %Y")
+    except:
+        # Fallback si hay problemas con el locale
+        fecha_str = fecha.strftime("%d/%m/%Y")
+    
     pdf.set_xy(fecha_x, fecha_y)
-    pdf.cell(40, 5, f'Fecha: {fecha.strftime("%d de %B de %Y")}', 0, 0, 'L')
+    pdf.cell(40, 5, f'Fecha: {fecha_str}', 0, 0, 'L')
     pdf.set_xy(consolidado_x, consolidado_y)
     pdf.cell(40, 5, f'Consolidado: {consolidado}', 0, 0, 'L')
     pdf.set_xy(hora_x, hora_y)
@@ -196,68 +228,72 @@ def main():
     
     if base_files and comp_file:
         # Procesar archivo de comparación
-        df_comp = pd.read_excel(comp_file, header=None, dtype=str)
-        
-        # Crear diccionario de coincidencias M -> H
-        saco_mapping = {}
-        for _, row in df_comp.iterrows():
-            if len(row) >= 13:  # Verificar que tenga columna M (índice 12)
-                if pd.notna(row[12]):  # Columna M
-                    saco_mapping[row[12]] = row[7] if (len(row) > 7 and pd.notna(row[7])) else ''
-        
-        # Combinar todos los archivos base en un solo DataFrame
-        combined_df = pd.DataFrame()
-        
-        for base_file in base_files:
-            df_base = pd.read_excel(base_file, header=None, dtype=str)
-            df_base = df_base.iloc[:, :3]  # Tomar primeras 3 columnas
-            df_base[3] = ''  # Columna SACO vacía
-            combined_df = pd.concat([combined_df, df_base], ignore_index=True)
-        
-         # Aplicar mapeo SACO al dataframe combinado
-        for idx, row in combined_df.iterrows():
-            guia = str(row[0]) if pd.notna(row[0]) else ''
+        try:
+            df_comp = pd.read_excel(comp_file, header=None, dtype=str)
             
-            # Caso especial para guías que comienzan exactamente con "SACO" (como en tu ejemplo)
-            if guia == 'SACO':
-                combined_df.at[idx, 3] = 'AMBATO'
-            # Guías que comienzan con "QU" (QU...) y no están en el mapeo -> "QUITO"
-            elif guia.startswith('QU') and guia not in saco_mapping:
-                combined_df.at[idx, 3] = 'QUITO'
-            # Guías que están en el mapeo -> valor del mapeo
-            elif guia in saco_mapping:
-                combined_df.at[idx, 3] = saco_mapping[guia]
-            # Cualquier otro caso (incluyendo guías que no comienzan con QU) -> "AMBATO"
-            else:
-                combined_df.at[idx, 3] = 'AMBATO'
+            # Crear diccionario de coincidencias M -> H
+            saco_mapping = {}
+            for _, row in df_comp.iterrows():
+                if len(row) >= 13:  # Verificar que tenga columna M (índice 12)
+                    if pd.notna(row[12]):  # Columna M
+                        saco_mapping[row[12]] = row[7] if (len(row) > 7 and pd.notna(row[7])) else ''
+            
+            # Combinar todos los archivos base en un solo DataFrame
+            combined_df = pd.DataFrame()
+            
+            for base_file in base_files:
+                df_base = pd.read_excel(base_file, header=None, dtype=str)
+                df_base = df_base.iloc[:, :3]  # Tomar primeras 3 columnas
+                df_base[3] = ''  # Columna SACO vacía
+                combined_df = pd.concat([combined_df, df_base], ignore_index=True)
+            
+             # Aplicar mapeo SACO al dataframe combinado
+            for idx, row in combined_df.iterrows():
+                guia = str(row[0]) if pd.notna(row[0]) else ''
+                
+                # Caso especial para guías que comienzan exactamente con "SACO"
+                if guia == 'SACO':
+                    combined_df.at[idx, 3] = 'AMBATO'
+                # Guías que comienzan con "QU" (QU...) y no están en el mapeo -> "QUITO"
+                elif guia.startswith('QU') and guia not in saco_mapping:
+                    combined_df.at[idx, 3] = 'QUITO'
+                # Guías que están en el mapeo -> valor del mapeo
+                elif guia in saco_mapping:
+                    combined_df.at[idx, 3] = saco_mapping[guia]
+                # Cualquier otro caso (incluyendo guías que no comienzan con QU) -> "AMBATO"
+                else:
+                    combined_df.at[idx, 3] = 'AMBATO'
+            
+            # ORDENAR POR COLUMNA SACO (columna 3)
+            # Convertir a numérico (los no numéricos se convierten en NaN)
+            combined_df[3] = pd.to_numeric(combined_df[3], errors='coerce')
+            # Ordenar (los NaN van primero)
+            combined_df = combined_df.sort_values(by=3, na_position='first')
+            # Volver a string y limpiar NaN
+            combined_df[3] = combined_df[3].astype(str)
+            combined_df = combined_df.replace('nan', '')
+            
+            total_paquetes = len(combined_df)
+            
+            # Mostrar vista previa del DataFrame combinado
+            with st.expander("Vista previa de todos los datos combinados (ordenados por SACO)"):
+                st.dataframe(combined_df.head())
+            
+            # Generar un solo PDF con todos los datos
+            pdf = generar_pdf(fecha, consolidado, hora, combined_df, total_paquetes)
+            pdf_bytes = pdf.output(dest='S').encode('latin-1')
+            
+            # Botón de descarga directa del PDF único
+            st.download_button(
+                label="📥 Descargar PDF Consolidado",
+                data=pdf_bytes,
+                file_name=f"Consolidado_{consolidado}_{fecha.strftime('%d-%m-%Y')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
         
-        # ORDENAR POR COLUMNA SACO (columna 3)
-        # Convertir a numérico (los no numéricos se convierten en NaN)
-        combined_df[3] = pd.to_numeric(combined_df[3], errors='coerce')
-        # Ordenar (los NaN van primero)
-        combined_df = combined_df.sort_values(by=3, na_position='first')
-        # Volver a string y limpiar NaN
-        combined_df[3] = combined_df[3].astype(str)
-        combined_df = combined_df.replace('nan', '')
-        
-        total_paquetes = len(combined_df)
-        
-        # Mostrar vista previa del DataFrame combinado
-        with st.expander("Vista previa de todos los datos combinados (ordenados por SACO)"):
-            st.dataframe(combined_df.head())
-        
-        # Generar un solo PDF con todos los datos
-        pdf = generar_pdf(fecha, consolidado, hora, combined_df, total_paquetes)
-        pdf_bytes = pdf.output(dest='S').encode('latin-1')
-        
-        # Botón de descarga directa del PDF único
-        st.download_button(
-            label="📥 Descargar PDF Consolidado",
-            data=pdf_bytes,
-            file_name=f"Consolidado_{consolidado}_{fecha.strftime('%d-%m-%Y')}.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+        except Exception as e:
+            st.error(f"Error al procesar los archivos: {str(e)}")
 
 if __name__ == "__main__":
     main()
